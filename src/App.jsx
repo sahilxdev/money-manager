@@ -1,69 +1,45 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
+import { useLocalStorage } from './hooks/useLocalStorage';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { PlusCircle } from 'lucide-react';
+import { formatCurrency } from './utils/helpers';
+import TransactionForm from './components/TransactionForm';
+import TransactionList from './components/TransactionList';
+import { SourceManagement } from './components/SourceManagement';
+import { SourceAnalytics, MonthlyTrendChart, SourceComparisonChart } from './components/Analytics';
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from 'recharts';
 
-// Utility function to format currency
-const formatCurrency = (amount) => {
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0
-  }).format(amount);
-};
-
-// Initial sources data structure
-const initialSources = {
-  cash: { 
-    id: 'cash', 
-    name: 'Cash', 
-    balance: 0, 
-    iconName: 'Coins',
-    color: '#0088FE'
-  },
-  bankAccounts: { 
-    id: 'bankAccounts', 
-    name: 'Bank Accounts', 
-    balance: 0, 
-    iconName: 'CreditCard',
-    color: '#00C49F'
-  },
-  digitalWallets: { 
-    id: 'digitalWallets', 
-    name: 'Digital Wallets', 
-    balance: 0, 
-    iconName: 'Wallet',
-    color: '#FFBB28'
-  },
-};
-
 const App = () => {
-  // Initialize state with localStorage or default values
-  const [sources, setSources] = useState(() => {
-    try {
-      const savedSources = localStorage.getItem('sources');
-      return savedSources ? JSON.parse(savedSources) : initialSources;
-    } catch (error) {
-      console.error('Error loading sources from localStorage:', error);
-      return initialSources;
-    }
+  // Initialize state with localStorage
+  const [sources, setSources] = useLocalStorage('sources', {
+    cash: { 
+      id: 'cash', 
+      name: 'Cash', 
+      balance: 0,
+      color: '#0088FE'
+    },
+    bankAccounts: { 
+      id: 'bankAccounts', 
+      name: 'Bank Accounts', 
+      balance: 0,
+      color: '#00C49F'
+    },
+    digitalWallets: { 
+      id: 'digitalWallets', 
+      name: 'Digital Wallets', 
+      balance: 0,
+      color: '#FFBB28'
+    },
   });
 
+  const [transactions, setTransactions] = useLocalStorage('transactions', []);
   const [showAddModal, setShowAddModal] = useState(false);
-  
-  // Save to localStorage whenever sources change
-  useEffect(() => {
-    try {
-      localStorage.setItem('sources', JSON.stringify(sources));
-    } catch (error) {
-      console.error('Error saving to localStorage:', error);
-    }
-  }, [sources]);
 
   // Calculate total balance
   const totalBalance = Object.values(sources).reduce(
-    (sum, source) => sum + (parseFloat(source.balance) || 0), 
+    (sum, source) => sum + (parseFloat(source.balance) || 0),
     0
   );
 
@@ -76,6 +52,60 @@ const App = () => {
       color: source.color
     }));
 
+  // Transaction handlers
+  const handleTransaction = (transaction) => {
+    // Add new transaction to list
+    const newTransaction = {
+      ...transaction,
+      id: Date.now(), // Add unique ID
+      timestamp: new Date().toISOString()
+    };
+    
+    setTransactions(prev => [newTransaction, ...prev]);
+
+    // Update source balance
+    setSources(prev => ({
+      ...prev,
+      [transaction.source]: {
+        ...prev[transaction.source],
+        balance: prev[transaction.source].balance + transaction.amount
+      }
+    }));
+  };
+
+  // Source management handlers
+  const handleAddSource = (sourceData) => {
+    setSources(prev => ({
+      ...prev,
+      [sourceData.id]: {
+        ...sourceData,
+        color: `#${Math.floor(Math.random()*16777215).toString(16)}` // Random color
+      }
+    }));
+  };
+
+  const handleUpdateSource = (sourceData) => {
+    setSources(prev => ({
+      ...prev,
+      [sourceData.id]: {
+        ...prev[sourceData.id],
+        ...sourceData
+      }
+    }));
+  };
+
+  const handleDeleteSource = (sourceId) => {
+    if (transactions.some(t => t.source === sourceId)) {
+      alert('Cannot delete source with existing transactions');
+      return;
+    }
+    setSources(prev => {
+      const newSources = { ...prev };
+      delete newSources[sourceId];
+      return newSources;
+    });
+  };
+
   return (
     <div className="min-h-screen bg-gray-100">
       {/* Header */}
@@ -86,9 +116,9 @@ const App = () => {
       </header>
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 py-6">
+      <main className="max-w-7xl mx-auto px-4 py-6 space-y-6">
         {/* Total Balance Card */}
-        <Card className="mb-6">
+        <Card>
           <CardHeader>
             <CardTitle>Total Balance</CardTitle>
           </CardHeader>
@@ -97,55 +127,110 @@ const App = () => {
           </CardContent>
         </Card>
 
-        {/* Sources Grid */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          {Object.values(sources).map((source) => (
-            <Card key={source.id} className="hover:shadow-lg transition-shadow">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">
-                  {source.name}
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">
-                  {formatCurrency(source.balance)}
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
+        {/* Main Navigation Tabs */}
+        <Tabs defaultValue="dashboard" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="dashboard">Dashboard</TabsTrigger>
+            <TabsTrigger value="transactions">Transactions</TabsTrigger>
+            <TabsTrigger value="sources">Sources</TabsTrigger>
+            <TabsTrigger value="analytics">Analytics</TabsTrigger>
+          </TabsList>
 
-        {/* Distribution Chart */}
-        <Card className="mb-6">
-          <CardHeader>
-            <CardTitle>Fund Distribution</CardTitle>
-          </CardHeader>
-          <CardContent className="h-64">
-            <ResponsiveContainer width="100%" height="100%">
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  innerRadius={60}
-                  outerRadius={80}
-                  paddingAngle={5}
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell 
-                      key={`cell-${index}`} 
-                      fill={entry.color} 
-                    />
-                  ))}
-                </Pie>
-                <Tooltip 
-                  formatter={(value) => formatCurrency(value)}
+          {/* Dashboard Tab */}
+          <TabsContent value="dashboard">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              {/* Source Cards */}
+              {Object.values(sources).map((source) => (
+                <Card key={source.id} className="hover:shadow-lg transition-shadow">
+                  <CardHeader>
+                    <CardTitle>{source.name}</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <p className="text-2xl font-bold">{formatCurrency(source.balance)}</p>
+                  </CardContent>
+                </Card>
+              ))}
+
+              {/* Distribution Chart */}
+              <Card className="col-span-full">
+                <CardHeader>
+                  <CardTitle>Fund Distribution</CardTitle>
+                </CardHeader>
+                <CardContent className="h-64">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie
+                        data={pieData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={80}
+                        paddingAngle={5}
+                        dataKey="value"
+                      >
+                        {pieData.map((entry, index) => (
+                          <Cell 
+                            key={`cell-${index}`} 
+                            fill={entry.color} 
+                          />
+                        ))}
+                      </Pie>
+                      <Tooltip 
+                        formatter={(value) => formatCurrency(value)}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </CardContent>
+              </Card>
+
+              {/* Recent Transactions */}
+              <Card className="col-span-full">
+                <TransactionList 
+                  transactions={transactions.slice(0, 5)} 
+                  sources={sources}
                 />
-              </PieChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
+              </Card>
+            </div>
+          </TabsContent>
+
+          {/* Transactions Tab */}
+          <TabsContent value="transactions">
+            <div className="space-y-6">
+              <TransactionList 
+                transactions={transactions} 
+                sources={sources}
+              />
+            </div>
+          </TabsContent>
+
+          {/* Sources Tab */}
+          <TabsContent value="sources">
+            <SourceManagement
+              sources={sources}
+              onAddSource={handleAddSource}
+              onUpdateSource={handleUpdateSource}
+              onDeleteSource={handleDeleteSource}
+            />
+          </TabsContent>
+
+          {/* Analytics Tab */}
+          <TabsContent value="analytics">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <MonthlyTrendChart transactions={transactions} />
+              <SourceComparisonChart 
+                sources={sources} 
+                transactions={transactions}
+              />
+              {Object.values(sources).map((source) => (
+                <SourceAnalytics
+                  key={source.id}
+                  source={source}
+                  transactions={transactions}
+                />
+              ))}
+            </div>
+          </TabsContent>
+        </Tabs>
 
         {/* Add Transaction Button */}
         <Button 
@@ -155,6 +240,14 @@ const App = () => {
           <PlusCircle className="h-4 w-4 mr-2" />
           Add Transaction
         </Button>
+
+        {/* Transaction Form Modal */}
+        <TransactionForm
+          isOpen={showAddModal}
+          onClose={() => setShowAddModal(false)}
+          onSubmit={handleTransaction}
+          sources={sources}
+        />
       </main>
     </div>
   );
