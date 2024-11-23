@@ -1,6 +1,6 @@
 # Money Manager - React + Tailwind CSS 💰
 
-A simple, offline, and lightweight **money tracking application** built with **React** and **Tailwind CSS**. Track your income, expenses, and funds across multiple sources (cash, bank accounts, UPI, wallets) without requiring a backend or database.
+A simple, offline, and lightweight **money tracking application** built with **React**, **ShadCN**, **Recharts** and **Tailwind CSS**. Track your income, expenses, and funds across multiple sources (cash, bank accounts, UPI, wallets) without requiring a backend or database.
 
 ---
 
